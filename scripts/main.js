@@ -3,44 +3,42 @@ let turnTimerInterval = null;
 Hooks.on("updateCombat", async (combat, changed, options, userId) => {
     if (!combat.started || !combat.isActive) return;
 
-    // 1. Start Timer on Turn/Round Change
-    // This happens when someone clicks "End Turn" in the tracker.
-    if (changed.turn !== undefined || changed.round !== undefined) {
-        // We only start the timer if the new combatant hasn't already "activated".
-        // In Draw Steel, usually moving to a new turn means they are waiting to act.
+    // --- STOP TIMER LOGIC ---
+    // Matches: COMBAT UPDATED {turn: 0}
+    // If the turn changes to a valid number (0, 1, 2...), it means someone has Activated.
+    if (typeof changed.turn === 'number') {
+        stopTimer();
+        return;
+    }
+
+    // --- START TIMER LOGIC ---
+    // Matches: COMBAT UPDATED {turn: null}
+    // If the turn becomes null, or if the round changes (resetting the cycle), we are in the "Director Phase".
+    // We explicitly check for null or round changes.
+    if (changed.turn === null || changed.round !== undefined) {
+        
+        // Double check: If we just started a new round, does the system auto-activate someone? 
+        // If the current turn is defined, don't start timer.
+        if (combat.turn !== null && combat.turn !== undefined) {
+             return;
+        }
+        
         startTimer();
     }
 });
 
-Hooks.on("updateCombatant", (combatant, changed, options, userId) => {
-    // 2. Stop Timer when a Combatant "Activates"
-    // We check specifically if the 'activated' flag (used by Draw Steel) turns true.
-    // We also check 'hasActed' which some versions use.
-    
-    // Debugging: If you are unsure what your system uses, you can uncomment the next line to see what changes:
-    // console.log("Draw Steel Timer | Combatant Update:", changed);
-
-    const isActivated = 
-        changed.flags?.["draw-steel"]?.activated === true || // Standard Draw Steel flag
-        changed.flags?.["draw-steel"]?.state === "acted" ||  // Alternate state check
-        changed.system?.activated === true;                  // System data check
-
-    if (isActivated) {
-        stopTimer();
-    }
-});
-
+// We keep deleteCombat to clean up if the encounter ends
 Hooks.on("deleteCombat", () => {
     stopTimer();
 });
 
 function startTimer() {
-    stopTimer(); // Clear any existing timer
+    stopTimer(); // Ensure we don't have two timers running
 
     const duration = 30;
     let timeLeft = duration;
 
-    // Create the container with Number AND Progress Bar
+    // Create the HUD Container
     const container = document.createElement("div");
     container.id = "draw-steel-turn-timer-container";
     container.innerHTML = `
@@ -57,7 +55,7 @@ function startTimer() {
     turnTimerInterval = setInterval(() => {
         timeLeft--;
 
-        // Sanity check: if element is gone, stop logic
+        // Safety check: if element was removed manually, kill logic
         if (!document.getElementById("draw-steel-turn-timer-container")) {
             clearInterval(turnTimerInterval);
             return;
@@ -66,17 +64,16 @@ function startTimer() {
         // Update Number
         numberDisplay.innerText = timeLeft;
 
-        // Update Progress Bar Width (Shrinking)
-        // We calculate percentage. 30s = 100%, 0s = 0%
+        // Update Progress Bar (30s = 100%, 0s = 0%)
         const percentage = (timeLeft / duration) * 100;
         barFill.style.width = `${percentage}%`;
 
-        // Flashy Phase (Last 10s)
+        // Flashy "Panic Mode" for last 10 seconds
         if (timeLeft <= 10) {
             container.classList.add("flashy");
         }
 
-        // Time's up
+        // Timer hits zero
         if (timeLeft <= 0) {
             stopTimer();
         }
