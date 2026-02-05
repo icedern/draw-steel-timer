@@ -29,9 +29,9 @@ Hooks.on("updateCombat", async (combat, changed, options, userId) => {
     if (game.user.isGM) {
         // Start Timer if Turn becomes Null (Director Phase)
         if (changed.turn === null || changed.round !== undefined) {
+            // Safety: Don't start if we just loaded into a valid turn (someone is active)
             if (combat.turn !== null && combat.turn !== undefined) return;
             
-            // Get the duration from settings
             const duration = game.settings.get('draw-steel-timer', 'defaultDuration');
             
             await combat.setFlag("draw-steel-timer", "status", "running");
@@ -47,6 +47,11 @@ Hooks.on("updateCombat", async (combat, changed, options, userId) => {
     renderTimerFromFlags(combat);
 });
 
+// FIX 3: Re-added Delete Hook to remove timer when combat ends
+Hooks.on("deleteCombat", (combat) => {
+    removeTimer();
+});
+
 Hooks.on("canvasReady", () => {
     if (game.combat) renderTimerFromFlags(game.combat);
 });
@@ -54,7 +59,6 @@ Hooks.on("canvasReady", () => {
 function renderTimerFromFlags(combat) {
     const status = combat.getFlag("draw-steel-timer", "status");
     const storedTime = combat.getFlag("draw-steel-timer", "timeLeft"); 
-    // Default to settings if flag is missing, otherwise use flag
     const duration = storedTime !== undefined ? storedTime : game.settings.get('draw-steel-timer', 'defaultDuration');
 
     if (status === "running") {
@@ -76,15 +80,15 @@ function renderTimerFromFlags(combat) {
 function startLocalTimer(startTime, combat) {
     removeTimer(); 
     localTimeLeft = startTime;
-    createTimerDOM(combat); // Pass combat to get max duration for bar calculation
+    createTimerDOM(combat); 
 
     turnTimerInterval = setInterval(() => {
         localTimeLeft--;
         updateDisplay(localTimeLeft, combat);
 
-        // AUDIO CUE: Play a tick sound for last 5 seconds (Client side)
-        if (localTimeLeft <= 10 && localTimeLeft > 0) {
-            AudioHelper.play({src: "sounds/drums.wav", volume: 0.5}, false); // Uses default Foundry UI sound
+        // AUDIO CUE: Tick sound (False = do not loop)
+        if (localTimeLeft <= 5 && localTimeLeft > 0) {
+            AudioHelper.play({src: "sounds/lock.wav", volume: 0.5}, false); 
         }
 
         if (localTimeLeft <= 0) {
@@ -92,18 +96,16 @@ function startLocalTimer(startTime, combat) {
             
             // GM ONLY: Handle Timeout Logic
             if (game.user.isGM) {
-                // Play "Time's Up" Sound globally
-                AudioHelper.play({src: "sounds/notify.wav", volume: 0.8}, true);
+                // FIX 1: Set loop to FALSE for the Gong sound
+                AudioHelper.play({src: "sounds/notify.wav", volume: 0.8}, false);
 
-                // Post Chat Message
                 if (game.settings.get('draw-steel-timer', 'chatMessage')) {
                     ChatMessage.create({
-                        content: "<h3>⏳ Time's Up!</h3><p>The Director picks the combatant.</p>",
+                        content: "<h3>⏳ Time's Up!</h3><p>The Director takes the initiative.</p>",
                         speaker: { alias: "Turn Timer" }
                     });
                 }
                 
-                // Auto-stop via flag so it disappears for everyone
                 combat.setFlag("draw-steel-timer", "status", "stopped");
             }
         }
@@ -117,7 +119,6 @@ function updateDisplay(val, combat) {
     const num = document.getElementById("draw-steel-turn-timer-number");
     const bar = document.getElementById("draw-steel-timer-bar-fill");
     
-    // Get max duration for percentage math
     const maxDuration = game.settings.get('draw-steel-timer', 'defaultDuration');
 
     if (num) num.innerText = val;
@@ -152,24 +153,29 @@ function createTimerDOM(combat) {
     `;
     document.body.appendChild(container);
 
-    // Attach Listeners (GM Only)
+    // FIX 2: Attach Listeners using global game.combat to prevent stale references
     if (game.user.isGM) {
-        document.getElementById("dst-pause").onclick = async () => {
-            await combat.setFlag("draw-steel-timer", "timeLeft", localTimeLeft);
-            await combat.setFlag("draw-steel-timer", "status", "paused");
-        };
-        document.getElementById("dst-play").onclick = async () => {
-             await combat.setFlag("draw-steel-timer", "status", "running");
-        };
-        document.getElementById("dst-restart").onclick = async () => {
+        document.getElementById("dst-pause").addEventListener("click", async () => {
+            if(!game.combat) return;
+            await game.combat.setFlag("draw-steel-timer", "timeLeft", localTimeLeft);
+            await game.combat.setFlag("draw-steel-timer", "status", "paused");
+        });
+        document.getElementById("dst-play").addEventListener("click", async () => {
+             if(!game.combat) return;
+             await game.combat.setFlag("draw-steel-timer", "status", "running");
+        });
+        document.getElementById("dst-restart").addEventListener("click", async () => {
+            if(!game.combat) return;
             const duration = game.settings.get('draw-steel-timer', 'defaultDuration');
-            await combat.setFlag("draw-steel-timer", "timeLeft", duration);
-            await combat.setFlag("draw-steel-timer", "status", "running");
-            startLocalTimer(duration, combat);
-        };
-        document.getElementById("dst-stop").onclick = async () => {
-            await combat.setFlag("draw-steel-timer", "status", "stopped");
-        };
+            await game.combat.setFlag("draw-steel-timer", "timeLeft", duration);
+            await game.combat.setFlag("draw-steel-timer", "status", "running");
+            // Force local restart for snappiness
+            startLocalTimer(duration, game.combat);
+        });
+        document.getElementById("dst-stop").addEventListener("click", async () => {
+            if(!game.combat) return;
+            await game.combat.setFlag("draw-steel-timer", "status", "stopped");
+        });
     }
 }
 

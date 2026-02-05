@@ -1,4 +1,4 @@
-/* Container for the whole timer HUD */
+/* Container adjustments */
 #draw-steel-turn-timer-container {
     position: fixed;
     top: 15%;
@@ -7,11 +7,46 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    pointer-events: none;
-    z-index: 1000;
+    /* Massive Z-Index to ensure it sits above Foundry UI layers */
+    z-index: 9999; 
+    pointer-events: none; /* Let clicks pass through empty space */
 }
 
-/* The Countdown Number */
+/* Enable clicking on the controls */
+#draw-steel-timer-controls {
+    pointer-events: auto; /* Re-enable clicks for buttons */
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    opacity: 0; 
+    transition: opacity 0.3s ease;
+}
+
+/* Show controls when GM mouses over the timer area */
+#draw-steel-turn-timer-container:hover #draw-steel-timer-controls {
+    opacity: 1;
+}
+
+.timer-btn {
+    background: rgba(0, 0, 0, 0.8);
+    border: 1px solid #ffffff;
+    color: #ffffff;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    transition: background 0.2s;
+}
+
+.timer-btn:hover {
+    background: #ff0000;
+}
+
+/* Timer Number */
 #draw-steel-turn-timer-number {
     font-size: 6rem;
     font-family: "Signika", sans-serif;
@@ -22,7 +57,7 @@
     transition: color 0.3s ease;
 }
 
-/* The Progress Bar Container */
+/* Progress Bar */
 #draw-steel-timer-bar-bg {
     width: 200px;
     height: 10px;
@@ -34,34 +69,20 @@
     box-shadow: 0 0 10px #000000;
 }
 
-/* The Actual Filling Bar */
 #draw-steel-timer-bar-fill {
     width: 100%;
     height: 100%;
     background-color: #ffffff;
-    transform-origin: center; /* Shrinks to the center */
-    transition: width 1s linear, background-color 0.3s ease;
+    transition: width 1s linear;
 }
 
-/* --- PANIC MODE STYLES (Last 10s) --- */
-
+/* Flashy Mode */
 #draw-steel-turn-timer-container.flashy #draw-steel-turn-timer-number {
     color: #ff0000;
-    text-shadow: 0 0 30px #ff0000, 0 0 10px #000000; /* Stronger glow */
+    text-shadow: 0 0 30px #ff0000;
     animation: pulse-aggressive 0.5s infinite alternate;
 }
-
-#draw-steel-turn-timer-container.flashy #draw-steel-timer-bar-fill {
-    background-color: #ff0000;
-    box-shadow: 0 0 15px #ff0000;
-}
-
-#draw-steel-turn-timer-container.flashy #draw-steel-timer-bar-bg {
-    border-color: #ff0000;
-}
-
-/* Bigger, meaner heartbeat */
 @keyframes pulse-aggressive {
     from { transform: scale(1); }
-    to { transform: scale(1.3); } /* Increased from 1.1 to 1.3 */
+    to { transform: scale(1.1); }
 }
